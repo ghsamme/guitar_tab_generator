@@ -2,6 +2,7 @@
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
+<title>Midi to guitar chords</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:sans-serif;background:#f5f5f0;color:#111;padding:1.5rem}
@@ -9,11 +10,29 @@ h1{font-size:22px;font-weight:500;margin-bottom:1.5rem}
 .upload-area{border:1.5px dashed #bbb;border-radius:12px;padding:2rem;text-align:center;cursor:pointer;background:#fff;margin-bottom:1rem;transition:border-color .2s}
 .upload-area:hover,.upload-area.drag{border-color:#4a7fd4}
 input[type=file]{display:none}
-#log{font-size:12px;font-family:monospace;color:#444;background:#f0f0f0;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;white-space:pre-wrap;display:none}
-#staff-wrap{background:#fff;border:1px solid #ccc;border-radius:12px;padding:1.25rem 1rem 1rem;overflow-x:auto;margin-bottom:1rem;display:none}
+#toolbar{display:none;gap:8px;align-items:center;margin-bottom:12px}
+#title-input{flex:1;padding:8px 12px;border:1px solid #ccc;border-radius:8px;font-size:15px}
+#pdf-btn{padding:8px 16px;background:#4a7fd4;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;white-space:nowrap}
+#pdf-btn:hover{background:#3a6bc4}
+#staff-wrap{display:none;background:#fff;border:1px solid #ccc;border-radius:12px;padding:1.25rem 1rem 1rem;overflow-x:auto;margin-bottom:1rem}
+/* Chord picker */
+#picker-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
+#picker-modal.open{display:flex}
+.picker{background:#2a2a2a;border-radius:12px;padding:1.25rem;color:#ddd;width:560px;max-height:88vh;overflow-y:auto}
+.picker h2{font-size:15px;font-weight:500;color:#aaa;margin-bottom:1rem;letter-spacing:.05em}
+.picker-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0}
+.picker-col-head{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.08em;padding:.4rem .5rem;border-bottom:1px solid #444;text-align:center}
+.picker-btn{background:#333;border:none;color:#ccc;padding:.35rem .5rem;font-size:13px;cursor:pointer;text-align:center;border-bottom:1px solid #222;transition:background .1s;width:100%}
+.picker-btn:hover{background:#4a7fd4;color:#fff}
+.picker-btn.selected{background:#4a7fd4;color:#fff;font-weight:600}
+.picker-actions{display:flex;gap:.5rem;margin-top:1rem}
+.picker-actions button{flex:1;padding:.6rem;border-radius:6px;border:none;cursor:pointer;font-size:14px}
+.picker-ok{background:#4a7fd4;color:#fff}
+.picker-cancel{background:#444;color:#ccc}
+/* Alt grepp modal */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
 .modal-bg.open{display:flex}
-.modal{background:#fff;border-radius:16px;padding:1.5rem;width:580px;max-height:88vh;overflow-y:auto;color:#111}
+.modal{background:#fff;border-radius:16px;padding:1.5rem;width:560px;max-height:88vh;overflow-y:auto;color:#111}
 .modal h2{font-size:18px;font-weight:600;margin-bottom:.2rem}
 .modal-sub{font-size:12px;color:#666;margin-bottom:1rem}
 .alt-grid{display:flex;flex-wrap:wrap;gap:.6rem}
@@ -26,14 +45,22 @@ input[type=file]{display:none}
 </head>
 <body>
 <h1>Midi to guitar chords</h1>
+
 <div class="upload-area" id="drop-zone" onclick="document.getElementById('fi').click()">
-  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.5" style="margin:0 auto 8px"><path d="M9 19V6l12-3v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="15" r="3"/></svg>
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.5" style="margin:0 auto 8px;display:block"><path d="M9 19V6l12-3v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="15" r="3"/></svg>
   <p style="font-size:15px;color:#666">Klicka eller dra en MIDI-fil hit</p>
   <p style="font-size:12px;color:#aaa;margin-top:.25rem">.mid / .midi</p>
   <input type="file" id="fi" accept=".mid,.midi">
 </div>
-<div id="log"></div>
+
+<div id="toolbar">
+  <input id="title-input" type="text" placeholder="Låttitel (valfritt)">
+  <button id="pdf-btn" onclick="exportPDF()">⬇ Spara som PDF</button>
+</div>
+
 <div id="staff-wrap"><canvas id="cv"></canvas></div>
+
+<!-- Alt grepp modal -->
 <div class="modal-bg" id="modal">
   <div class="modal">
     <h2 id="mtitle"></h2>
@@ -43,164 +70,149 @@ input[type=file]{display:none}
   </div>
 </div>
 
+<!-- Chord picker modal -->
+<div id="picker-modal">
+  <div class="picker">
+    <h2>VÄLJ ACKORD</h2>
+    <div class="picker-grid">
+      <div><div class="picker-col-head">Root Note</div><div id="pk-roots"></div></div>
+      <div><div class="picker-col-head">Chord Type</div><div id="pk-types"></div></div>
+      <div><div class="picker-col-head">Tensions</div><div id="pk-tensions"></div></div>
+      <div><div class="picker-col-head">Bass Note</div><div id="pk-bass"></div></div>
+    </div>
+    <div class="picker-actions">
+      <button class="picker-ok" onclick="pickerConfirm()">OK</button>
+      <button class="picker-cancel" onclick="pickerClose()">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <script>
-// ── Chord DB (injected from document) ────────────────────────────────────────
-// DB is the full guitar.json object provided by the user
-const DB = {"main":{"strings":6,"fretsOnChord":4,"name":"guitar"},"tunings":{"standard":["E2","A2","D3","G3","B3","E4"]},"keys":["C","C#","D","Eb","E","F","F#","G","Ab","A","Bb","B"],"suffixes":["major","minor","dim","dim7","sus","sus2","sus4","sus2sus4","7sus4","7/G","alt","aug","5","6","69","7","7b5","aug7","9","9b5","aug9","7b9","7#9","11","9#11","13","maj7","maj7b5","maj7#5","maj7sus2","maj9","maj11","maj13","m6","m69","m7","m7b5","m9","m11","mmaj7","mmaj7b5","mmaj9","mmaj11","add9","madd9","add11","/E","/F","/F#","/G","/G#","/A","/Bb","/B","/C","/C#","m/B","m/C","m/C#","/D","m/D","/D#","m/D#","m/E","m/F","m/F#","m/G","m/G#","m9/Bb","m9/B","m9/C","m9/C#","m9/D","m9/Eb","m9/E","m9/F","m9/F#","m9/G","m9/Ab","m9/A","/Eb","/Ab","m/A","m/Bb","m/Eb","m/Ab"]};
-// We embed the chords portion separately to keep the script manageable
-// The full chords object is passed via CHORDS_RAW below
-const CHORDS_RAW = (()=>{
-// We parse the chord data from the document that was pasted
-// Since the document contains the full JSON, we reconstruct lookups from it
-// The data was provided in the system context - we hardcode the key->suffix->positions map
-// by referencing the structure we know from the JSON
-return null; // will be loaded async from inline data
-})();
+// ── Constants ─────────────────────────────────────────────────────────────────
+const NN=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const FG='#111', BLUE='#2a5db0', MUTEC='#555';
+const CW=120,FH=112,NH=22,SH=172,RH=FH+NH+SH+20,CPR=6,ML=52,MT=16;
 
-// ── Key/suffix mapping ────────────────────────────────────────────────────────
-// Map our chord quality names → DB suffix strings
-const QUAL_TO_SUFFIX = {
-  'maj':'major','min':'minor','7':'7','maj7':'maj7','min7':'m7',
-  'dim':'dim','dim7':'dim7','aug':'aug','sus2':'sus2','sus4':'sus4',
-  '9':'9','m7b5':'m7b5','m7b5':'m7b5','11':'11','13':'13','6':'6',
-};
-// Map root note names → DB key names
-const ROOT_TO_KEY = {
-  'C':'C','C#':'C#','Db':'C#','D':'D','D#':'Eb','Eb':'Eb',
-  'E':'E','F':'F','F#':'F#','Gb':'F#','G':'G','G#':'Ab','Ab':'Ab',
-  'A':'A','A#':'Bb','Bb':'Bb','B':'B',
-};
-// DB key name → property name in chords object (some use 'Csharp','Fsharp' etc)
-const KEY_PROP = {
-  'C':'C','C#':'Csharp','D':'D','Eb':'Eb','E':'E','F':'F',
-  'F#':'Fsharp','G':'G','Ab':'Ab','A':'A','Bb':'Bb','B':'B',
-};
+// ── State ─────────────────────────────────────────────────────────────────────
+let SEQ=[],SEL={},ZONES=[],SONG_TITLE='';
+let CHORDS=null, Tonal=null;
 
-let CHORDS = null; // will hold parsed chords object
+// ── DB loader ─────────────────────────────────────────────────────────────────
+const ROOT_TO_KEY={'C':'C','C#':'C#','Db':'C#','D':'D','D#':'Eb','Eb':'Eb','E':'E','F':'F','F#':'F#','Gb':'F#','G':'G','G#':'Ab','Ab':'Ab','A':'A','A#':'Bb','Bb':'Bb','B':'B'};
+const KEY_PROP={'C':'C','C#':'Csharp','D':'D','Eb':'Eb','E':'E','F':'F','F#':'Fsharp','G':'G','Ab':'Ab','A':'A','Bb':'Bb','B':'B'};
+const QUAL_TO_SUFFIX={'maj':'major','min':'minor','7':'7','maj7':'maj7','min7':'m7','dim':'dim','dim7':'dim7','aug':'aug','sus2':'sus2','sus4':'sus4','9':'9','m7b5':'m7b5','11':'11','13':'13','6':'6'};
 
-let Tonal = null;
-async function loadTonal() {
-  if (Tonal) return;
-  await new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js';
-    s.onload=()=>{Tonal=window.Tonal;log('Tonal.js laddad');res()};
-    s.onerror=()=>{log('Tonal.js misslyckades, använder fallback');res()};
-    document.head.appendChild(s);
-  });
-}
-
-async function loadChords() {
-  if (CHORDS) return;
-  // The full JSON was provided in the conversation. We load it from a data URL
-  // embedded in this script. Since the document is huge, we fetch the same CDN
-  // URL that was confirmed working (jsDelivr npm raw):
-  log('Laddar ackordsdatabas...');
-  const urls = [
+async function loadDB(){
+  if(CHORDS) return;
+  const urls=[
     'https://cdn.jsdelivr.net/npm/@tombatossals/chords-db@0.5.1/lib/guitar.json',
-    'https://raw.githack.com/tombatossals/chords-db/master/lib/guitar.json',
+    'https://cdn.jsdelivr.net/npm/chords-db/lib/guitar.json',
   ];
-  for (const url of urls) {
-    try {
-      const r = await fetch(url);
-      if (!r.ok) continue;
-      const data = await r.json();
-      CHORDS = data.chords;
-      log(`DB laddad: ${Object.keys(CHORDS).length} tonartnycklar`);
+  for(const url of urls){
+    try{
+      const r=await fetch(url);
+      if(!r.ok) continue;
+      const data=await r.json();
+      CHORDS=data.chords;
+      console.log('DB laddad');
       return;
-    } catch(e) { log('  fel: '+e.message); }
+    }catch(e){}
   }
-  // Fallback: use the inline data from the document the user pasted
-  log('Nätverket misslyckades – försöker med inbyggd data…');
-  CHORDS = INLINE_CHORDS;
-  log('Inbyggd databas aktiv.');
+  CHORDS={};
+  console.log('DB misslyckades');
 }
 
-function getPositions(root, quality) {
-  if (!CHORDS) return [];
-  const key = ROOT_TO_KEY[root] || root;
-  const prop = KEY_PROP[key] || key;
-  const suffix = QUAL_TO_SUFFIX[quality] || 'major';
-  const arr = CHORDS[prop] || CHORDS[key];
-  if (!arr) return [];
-  const entry = arr.find(c => c.suffix === suffix)
-              || arr.find(c => c.suffix === 'major');
-  return entry ? (entry.positions || []) : [];
+async function loadTonal(){
+  if(Tonal) return;
+  const urls=[
+    'https://cdn.jsdelivr.net/npm/tonal@4.10.3/browser/tonal.min.js',
+    'https://cdn.jsdelivr.net/npm/@tonaljs/tonal@4.10.3/browser/tonal.min.js',
+    'https://unpkg.com/tonal@4.10.3/browser/tonal.min.js',
+  ];
+  for(const url of urls){
+    const ok=await new Promise(res=>{
+      const s=document.createElement('script');
+      s.src=url;
+      s.onload=()=>{Tonal=window.Tonal||window.tonal||null;res(!!Tonal)};
+      s.onerror=()=>res(false);
+      document.head.appendChild(s);
+    });
+    if(ok){console.log('Tonal laddad');return;}
+  }
+  console.log('Tonal ej tillgänglig');
 }
 
-// Convert a DB position to internal rendering format
-function convertPos(pos) {
-  const {frets, baseFret, barres} = pos;
-  const mute=[], open=[], dots=[];
-  frets.forEach((f,i) => {
-    const s = 6-i; // string 6=lowE … 1=highE
-    if (f === -1) mute.push(s);
-    else if (f === 0) open.push(s);
-    else dots.push({s, f: baseFret-1+f});
+function getPositions(root,quality){
+  if(!CHORDS) return [];
+  const key=ROOT_TO_KEY[root]||root;
+  const prop=KEY_PROP[key]||key;
+  const suffix=QUAL_TO_SUFFIX[quality]||'major';
+  const arr=CHORDS[prop]||CHORDS[key];
+  if(!arr) return [];
+  return (arr.find(c=>c.suffix===suffix)||arr.find(c=>c.suffix==='major')||{}).positions||[];
+}
+
+function convertPos(pos){
+  const{frets,baseFret,barres}=pos;
+  const mute=[],open=[],dots=[];
+  frets.forEach((f,i)=>{
+    const s=6-i;
+    if(f===-1)mute.push(s);
+    else if(f===0)open.push(s);
+    else dots.push({s,f:baseFret-1+f});
   });
-  let barre = null;
-  if (barres && barres.length > 0) {
-    const bv = barres[0]; // relative fret value
-    if (bv === 0) {
-      // full barre at baseFret across all non-muted strings
-      const bs = frets.map((f,i)=>f>=0?6-i:null).filter(s=>s!==null);
-      if (bs.length >= 2) {
-        barre = {f:baseFret, from:Math.max(...bs), to:Math.min(...bs)};
-        dots.splice(0,dots.length,...dots.filter(d=>d.f>baseFret));
-      }
-    } else {
-      const actualF = baseFret-1+bv;
-      const bs = frets.map((f,i)=>f===bv?6-i:null).filter(s=>s!==null);
-      if (bs.length >= 2) {
-        barre = {f:actualF, from:Math.max(...bs), to:Math.min(...bs)};
-        const bset = new Set(bs);
-        dots.splice(0,dots.length,...dots.filter(d=>!bset.has(d.s)));
-      }
+  let barre=null;
+  if(barres&&barres.length>0){
+    const bv=barres[0];
+    if(bv===0){
+      const bs=frets.map((f,i)=>f>=0?6-i:null).filter(s=>s!==null);
+      if(bs.length>=2){barre={f:baseFret,from:Math.max(...bs),to:Math.min(...bs)};dots.splice(0,dots.length,...dots.filter(d=>d.f>baseFret));}
+    }else{
+      const actualF=baseFret-1+bv;
+      const bs=frets.map((f,i)=>f===bv?6-i:null).filter(s=>s!==null);
+      if(bs.length>=2){barre={f:actualF,from:Math.max(...bs),to:Math.min(...bs)};const bset=new Set(bs);dots.splice(0,dots.length,...dots.filter(d=>!bset.has(d.s)));}
     }
   }
-  return {mute,open,dots,barre,baseFret, label: baseFret>1?`Pos ${baseFret}`:'Open'};
+  return{mute,open,dots,barre,baseFret,label:baseFret>1?`Pos ${baseFret}`:'Open'};
 }
 
 // ── MIDI parser ───────────────────────────────────────────────────────────────
-function parseMIDI(buf) {
-  const u8=new Uint8Array(buf); let p=0;
+function parseMIDI(buf){
+  const u8=new Uint8Array(buf);let p=0;
   const r1=()=>u8[p++];
   const r2=()=>{const v=(u8[p]<<8)|u8[p+1];p+=2;return v};
   const r4=()=>{const v=(u8[p]<<24)|(u8[p+1]<<16)|(u8[p+2]<<8)|u8[p+3];p+=4;return v>>>0};
   const vlq=()=>{let v=0,b;do{b=r1();v=(v<<7)|(b&0x7f)}while(b&0x80);return v};
   const tag=()=>String.fromCharCode(u8[p],u8[p+1],u8[p+2],u8[p+3]);
-  // Log first bytes for debugging
-  const preview=Array.from(u8.slice(0,16)).map(b=>'0x'+b.toString(16).padStart(2,'0')+`(${b>=32&&b<127?String.fromCharCode(b):'.'})` ).join(' ');
-  log('Första bytes: '+preview);
-  // Scan forward to find MThd
-  while(p<u8.length-4 && tag()!=='MThd') p++;
-  if(p>=u8.length-4) throw new Error('Inte en giltig MIDI-fil – hittade ingen MThd-markör');
-  p+=4;                          // skip 'MThd'
-  const hlen=r4();               // header chunk length (always 6)
-  const fmt=r2(), ntrk=r2(), ppqRaw=r2();
+  while(p<u8.length-4&&tag()!=='MThd')p++;
+  if(p>=u8.length-4)throw new Error('Inte en giltig MIDI-fil');
+  p+=4;
+  const hlen=r4();const fmt=r2(),ntrk=r2(),ppqRaw=r2();
   const ppq=(ppqRaw&0x8000)?480:ppqRaw;
-  // skip any extra header bytes beyond 6
-  if(hlen>6) p+=hlen-6;
-  log(`Format:${fmt} Spår:${ntrk} PPQ:${ppq}`);
-  const evs=[];
+  if(hlen>6)p+=hlen-6;
+  const evs=[],meta={title:''};
   for(let t=0;t<ntrk;t++){
     while(p<=u8.length-8&&tag()!=='MTrk')p++;
     if(p>u8.length-8)break;
-    p+=4; const end=Math.min(p+r4(),u8.length);
-    let tick=0, runSt=0;
+    p+=4;const end=Math.min(p+r4(),u8.length);
+    let tick=0,runSt=0;
     while(p<end){
-      tick+=vlq(); if(p>=end)break;
+      tick+=vlq();if(p>=end)break;
       let st=u8[p];
-      if(st===0xFF){p++;r1();p+=vlq();continue}
+      if(st===0xFF){
+        p++;const mtype=r1(),mlen=vlq();
+        if((mtype===0x03||mtype===0x00)&&!meta.title){
+          let s='';for(let i=0;i<mlen;i++)s+=String.fromCharCode(u8[p+i]);
+          const clean=s.replace(/[\x00-\x1F]/g,'').trim();
+          if(clean)meta.title=clean;
+        }
+        p+=mlen;continue;
+      }
       if(st===0xF0||st===0xF7){p++;p+=vlq();continue}
       if(st&0x80){runSt=st;p++}else st=runSt;
       if(!st){p++;continue}
       const tp=(st>>4)&0xF;
-      if(tp===0x9){const n=r1(),v=r1();
-        log(`  spår${t} tick${tick} note${n} vel${v}`);
-        // Only keep real notes (21=A0 to 108=C8), skip note0 garbage and vel0
-        if(v>0 && n>=21 && n<=108) evs.push({tick,note:n});
-      }
+      if(tp===0x9){const n=r1(),v=r1();if(v>0&&n>=21&&n<=108)evs.push({tick,note:n})}
       else if(tp===0x8||tp===0xA||tp===0xB||tp===0xE){r1();r1()}
       else if(tp===0xC||tp===0xD){r1()}
       else p++;
@@ -208,169 +220,115 @@ function parseMIDI(buf) {
     }
     p=end;
   }
-  log(`Note-on events: ${evs.length}`);
-  return{evs,ppq};
+  return{evs,ppq,title:meta.title};
 }
 
-// ── Chord identification ──────────────────────────────────────────────────────
-const NN=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+// ── Chord detection ───────────────────────────────────────────────────────────
 const TMPLS=[
   {n:'maj',iv:[0,4,7]},{n:'min',iv:[0,3,7]},{n:'7',iv:[0,4,7,10]},
   {n:'maj7',iv:[0,4,7,11]},{n:'min7',iv:[0,3,7,10]},{n:'dim',iv:[0,3,6]},
   {n:'aug',iv:[0,4,8]},{n:'sus2',iv:[0,2,7]},{n:'sus4',iv:[0,5,7]},
   {n:'dim7',iv:[0,3,6,9]},{n:'m7b5',iv:[0,3,6,10]},{n:'9',iv:[0,4,7,10,14]},
 ];
-function identChord(pitches) {
-  const pcs=[...new Set(pitches.map(n=>n%12))];
-  if(pcs.length<2)return null;
-  let best=null,bs=0;
+
+function bestChordMatch(notes){
+  if(notes.length<2)return null;
+  const bassNote=Math.min(...notes);
+  const bassPc=bassNote%12;
+  const bassName=NN[bassPc];
+  const pcs=[...new Set(notes.map(n=>n%12))];
+  const noteNames=pcs.map(pc=>NN[pc]);
+
+  if(Tonal){
+    const upperNames=noteNames.filter(n=>n!==bassName);
+    let upperChord=null;
+    if(upperNames.length>=2){
+      const res=Tonal.Chord.detect(upperNames);
+      if(res.length>0)upperChord=res.sort((a,b)=>a.length-b.length)[0];
+    }
+    const ordered=[bassName,...upperNames];
+    const allRes=Tonal.Chord.detect(ordered);
+    const allBest=allRes.length>0?allRes.sort((a,b)=>a.length-b.length)[0]:null;
+    if(upperChord){
+      const upperRoot=upperChord.replace(/\/.*$/,'').match(/^([A-G][b#]?)/)?.[1];
+      if(upperRoot&&upperRoot!==bassName){
+        const name=upperChord+'/'+bassName;
+        return{name,root:upperRoot,quality:upperChord.replace(/^[A-G][b#]?/,'')};
+      }
+    }
+    if(allBest){
+      const root=allBest.replace(/\/.*$/,'').match(/^([A-G][b#]?)/)?.[1]||bassName;
+      const quality=allBest.replace(/^[A-G][b#]?/,'').replace(/\/.*$/,'');
+      return{name:allBest,root,quality};
+    }
+  }
+
+  const SIMP={'maj':10,'min':10,'7':9,'maj7':9,'min7':9,'dim':8,'aug':8,'dim7':7,'m7b5':7,'9':5,'sus4':6,'sus2':6};
+  let best=null,bs=-1;
   for(let r=0;r<12;r++) for(const t of TMPLS){
     const req=t.iv.map(i=>(r+i)%12);
-    const sc=req.filter(p=>pcs.includes(p)).length/Math.max(req.length,pcs.length);
-    if(sc>bs){bs=sc;best={r,t}}
+    const hits=req.filter(p=>pcs.includes(p)).length;
+    const extra=pcs.filter(p=>!req.includes(p)).length;
+    const score=hits/req.length-(extra*0.1)+((r===bassPc)?0.3:0)+((SIMP[t.n]||5)/100);
+    if(score>bs){bs=score;best={r,t}}
   }
-  if(!best||bs<0.55)return null;
+  if(!best||bs<0.3)return null;
   const rn=NN[best.r],q=best.t.n;
   let d=rn;
   if(q==='min')d+='m';else if(q==='min7')d+='m7';else if(q==='7')d+='7';
   else if(q==='maj7')d+='maj7';else if(q==='dim')d+='dim';else if(q==='aug')d+='aug';
   else if(q==='sus2')d+='sus2';else if(q==='sus4')d+='sus4';
   else if(q==='dim7')d+='dim7';else if(q==='m7b5')d+='m7b5';else if(q==='9')d+='9';
+  if(best.r!==bassPc)d+='/'+bassName;
   return{name:d,root:rn,quality:q};
 }
 
-function buildChords(evs,ppq) {
-  if(!evs.length) return [];
-
+function buildChords(evs,ppq){
+  if(!evs.length)return[];
   evs.sort((a,b)=>a.tick-b.tick);
   const offset=evs[0].tick;
   evs.forEach(e=>e.tick-=offset);
-  const lastTick=evs[evs.length-1].tick;
-  log(`Tick-spann: 0 – ${lastTick}, PPQ:${ppq}, offset:${offset}`);
-
-  // Bucket notes by beat (floor). Only use notes that start within
-  // the FIRST half-beat of each beat window to avoid bleed from previous chord.
   const bm={};
   evs.forEach(e=>{
     const b=Math.floor(e.tick/ppq);
-    const posInBeat=e.tick - b*ppq;
-    if(posInBeat < ppq*0.75){ // only notes starting in first 3/4 of beat
-      (bm[b]||(bm[b]=[])).push(e.note);
-    }
+    const pos=e.tick-b*ppq;
+    if(pos<ppq*0.75)(bm[b]||(bm[b]=[])).push(e.note);
   });
   const beats=Object.keys(bm).map(Number).sort((a,b)=>a-b);
-  log(`Beats med noter: ${beats.join(', ')}`);
-
-  // Merge consecutive beats (gap ≤ 3) into chord groups
-  const groups=[];
-  let cur=null;
+  const groups=[];let cur=null;
   for(const b of beats){
-    if(!cur||b-cur.beats[cur.beats.length-1]>3){
-      cur={startBeat:b,beats:[b]};
-      groups.push(cur);
-    } else {
-      cur.beats.push(b);
-    }
+    if(!cur||b-cur.beats[cur.beats.length-1]>3){cur={startBeat:b,beats:[b]};groups.push(cur);}
+    else cur.beats.push(b);
   }
-  log(`Grupper: ${groups.length} → beats: ${groups.map(g=>g.startBeat).join(', ')}`);
-
   const out=[];
   for(const g of groups){
     let notes=[];
     g.beats.forEach(b=>notes.push(...bm[b]));
-    // Deduplicate by pitch class – keep only one note per semitone class
     const seen=new Set();
-    notes=[...notes].sort((a,b)=>a-b).filter(n=>{
-      const pc=n%12;
-      if(seen.has(pc))return false;
-      seen.add(pc);return true;
-    });
-
-    // Find best chord match: try all subsets by removing outliers
-    // Priority: keep notes that appear most often as chord tones
+    notes=[...notes].sort((a,b)=>a-b).filter(n=>{const pc=n%12;if(seen.has(pc))return false;seen.add(pc);return true;});
     const ch=bestChordMatch(notes);
-    if(ch) out.push({...ch, beat:g.startBeat, notes});
-    else log(`  Ingen match beat ${g.startBeat}: [${notes.join(',')}]`);
+    if(ch)out.push({...ch,beat:g.startBeat,notes});
   }
-  log(`Identifierade ackord: ${out.map(c=>c.name+'@'+c.beat).join(', ')}`);
   return out;
 }
 
-function bestChordMatch(notes) {
-  if(notes.length < 2) return null;
-
-  // The lowest note is the bass – strongly prefer it as root
-  const bassNote = Math.min(...notes);
-  const bassPc = bassNote % 12;
-
-  // Deduplicate by pitch class
-  const pcMap={};
-  notes.forEach(n=>{const pc=n%12;if(pcMap[pc]===undefined||n<pcMap[pc])pcMap[pc]=n;});
-  const pcs=Object.keys(pcMap).map(Number);
-
-  const SIMPLICITY={'maj':10,'min':10,'7':9,'maj7':9,'min7':9,'dim':8,'aug':8,'dim7':7,'m7b5':7,'9':5,'sus4':6,'sus2':6};
-
-  let best=null, bestScore=-1;
-  for(let r=0;r<12;r++){
-    for(const t of TMPLS){
-      const req=t.iv.map(i=>(r+i)%12);
-      const hits=req.filter(p=>pcs.includes(p)).length;
-      if(hits<2) continue;
-      const extra=pcs.filter(p=>!req.includes(p)).length;
-      const coverage=hits/req.length;
-      const penalty=extra*0.15;
-      const simplicity=(SIMPLICITY[t.n]||5)/10;
-      // Strong bonus if root matches bass note
-      const bassBonus = (r===bassPc) ? 0.35 : 0;
-      const score=coverage*0.5 + simplicity*0.15 - penalty + bassBonus;
-      if(score>bestScore){bestScore=score;best={r,t};}
-    }
-  }
-  if(!best||bestScore<0.3) return null;
-
-  const rn=NN[best.r],q=best.t.n;
-  let d=rn;
-  if(q==='min')d+='m';else if(q==='min7')d+='m7';else if(q==='7')d+='7';
-  else if(q==='maj7')d+='maj7';else if(q==='dim')d+='dim';else if(q==='aug')d+='aug';
-  else if(q==='sus2')d+='sus2';else if(q==='sus4')d+='sus4';
-  else if(q==='dim7')d+='dim7';else if(q==='m7b5')d+='m7b5';else if(q==='9')d+='9';
-  return{name:d,root:rn,quality:q};
-}
-
-// ── Canvas layout ─────────────────────────────────────────────────────────────
-const CW=120,FH=112,NH=22,SH=172,RH=FH+NH+SH+20;
-const CPR=6,ML=52,MT=16;
-const FG='#111', BLUE='#2a5db0', MUTEC='#555';
-let SEQ=[],SEL={},ZONES=[];
-
+// ── Canvas rendering ──────────────────────────────────────────────────────────
 function drawFret(ctx,v,x,y,w,h){
-  const S=6,F=5,ml=22,mr=5,mt=20,mb=5;
-  const cw=(w-ml-mr)/(S-1), rh=(h-mt-mb)/F;
-  let mn=99;
-  v.dots.forEach(d=>{if(d.f>0)mn=Math.min(mn,d.f)});
-  if(v.barre)mn=Math.min(mn,v.barre.f);
-  if(mn===99)mn=0;
-  const sf=mn<=1?0:mn-1, isOpen=sf===0;
+  const S=6,F=5,ml=22,mr=5,mt=20;
+  const cw=(w-ml-mr)/(S-1),rh=(h-mt-5)/F;
+  let mn=99;v.dots.forEach(d=>{if(d.f>0)mn=Math.min(mn,d.f)});
+  if(v.barre)mn=Math.min(mn,v.barre.f);if(mn===99)mn=0;
+  const sf=mn<=1?0:mn-1,isOpen=sf===0;
   ctx.save();
   if(isOpen){ctx.strokeStyle=FG;ctx.lineWidth=3.5;ctx.beginPath();ctx.moveTo(x+ml,y+mt);ctx.lineTo(x+w-mr,y+mt);ctx.stroke()}
-  // Fret band numbers
   ctx.font='bold 8px sans-serif';ctx.textAlign='right';ctx.fillStyle=FG;
-  for(let f=1;f<=F;f++) ctx.fillText(sf+f, x+ml-3, y+mt+(f-.5)*rh+3);
-  // Fret lines
+  for(let f=1;f<=F;f++)ctx.fillText(sf+f,x+ml-3,y+mt+(f-.5)*rh+3);
   for(let f=0;f<=F;f++){ctx.strokeStyle=FG;ctx.lineWidth=f===0?1.2:1;ctx.beginPath();ctx.moveTo(x+ml,y+mt+f*rh);ctx.lineTo(x+w-mr,y+mt+f*rh);ctx.stroke()}
-  // String lines
   for(let i=0;i<S;i++){ctx.strokeStyle=FG;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x+ml+i*cw,y+mt);ctx.lineTo(x+ml+i*cw,y+mt+F*rh);ctx.stroke()}
-  // Mutes & opens
   ctx.font='bold 11px sans-serif';ctx.textAlign='center';
   v.mute.forEach(s=>{ctx.fillStyle=MUTEC;ctx.fillText('×',x+ml+(6-s)*cw,y+mt-5)});
   v.open.forEach(s=>{ctx.strokeStyle=FG;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x+ml+(6-s)*cw,y+mt-7,4,0,Math.PI*2);ctx.stroke()});
-  // Barre
-  if(v.barre){
-    const{f,from,to}=v.barre;
-    const by=y+mt+(f-sf-.5)*rh,bx1=x+ml+(6-from)*cw,bx2=x+ml+(6-to)*cw;
-    ctx.fillStyle=BLUE;ctx.beginPath();ctx.roundRect(bx1-5,by-6,bx2-bx1+10,12,6);ctx.fill();
-  }
-  // Dots
+  if(v.barre){const{f,from,to}=v.barre;const by=y+mt+(f-sf-.5)*rh,bx1=x+ml+(6-from)*cw,bx2=x+ml+(6-to)*cw;ctx.fillStyle=BLUE;ctx.beginPath();ctx.roundRect(bx1-5,by-6,bx2-bx1+10,12,6);ctx.fill()}
   v.dots.forEach(d=>{
     if(d.f===0){ctx.strokeStyle=FG;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x+ml+(6-d.s)*cw,y+mt-7,4,0,Math.PI*2);ctx.stroke();return}
     const dx=x+ml+(6-d.s)*cw,dy=y+mt+(d.f-sf-.5)*rh;
@@ -385,9 +343,10 @@ function bY(p,yo){const s=DIA[p%12]+Math.floor(p/12)*7;return yo+(DIA[7]+3*7-s)*
 
 function render(){
   const canvas=document.getElementById('cv');
-  if(!SEQ.length)return;
+  if(!canvas||!SEQ.length)return;
+  const titleH=SONG_TITLE?36:0;
   const rows=Math.ceil(SEQ.length/CPR),mc=Math.min(SEQ.length,CPR);
-  const W=ML+mc*CW+24,H=MT+rows*RH+20;
+  const W=ML+mc*CW+24,H=MT+titleH+rows*RH+20;
   const dpr=window.devicePixelRatio||1;
   canvas.width=W*dpr;canvas.height=H*dpr;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
@@ -395,10 +354,13 @@ function render(){
   ctx.scale(dpr,dpr);
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
   ZONES=[];
-
+  if(SONG_TITLE){
+    ctx.font='bold 18px sans-serif';ctx.fillStyle=FG;ctx.textAlign='center';
+    ctx.fillText(SONG_TITLE,W/2,MT+22);
+  }
   for(let row=0;row<rows;row++){
     const rc=SEQ.slice(row*CPR,(row+1)*CPR);
-    const yo=MT+row*RH,tyo=yo+FH+NH+20,byo=tyo+68;
+    const yo=MT+titleH+row*RH,tyo=yo+FH+NH+20,byo=tyo+68;
     ctx.fillStyle=FG;ctx.textAlign='left';
     ctx.font='42px serif';ctx.fillText('𝄞',2,tyo+44);
     ctx.font='28px serif';ctx.fillText('𝄢',2,byo+30);
@@ -410,17 +372,19 @@ function render(){
     }
     ctx.lineWidth=1.8;
     const bar=bx=>{ctx.beginPath();ctx.moveTo(bx,tyo);ctx.lineTo(bx,tyo+32);ctx.stroke();ctx.beginPath();ctx.moveTo(bx,byo);ctx.lineTo(bx,byo+32);ctx.stroke()};
-    bar(ML); rc.forEach((_,ci)=>bar(ML+(ci+1)*CW));
-
+    bar(ML);rc.forEach((_,ci)=>bar(ML+(ci+1)*CW));
     rc.forEach((ch,ci)=>{
       const ai=row*CPR+ci,cx=ML+ci*CW,mid=cx+CW/2;
       const vi=SEL[ai]||0;
       const positions=getPositions(ch.root,ch.quality);
       const raw=positions[Math.min(vi,positions.length-1)];
       const v=raw?convertPos(raw):null;
-      if(v){const z={x:cx+4,y:yo+2,w:CW-8,h:FH-4,ci:ai};ZONES.push(z);drawFret(ctx,v,z.x,z.y,z.w,z.h)}
-      ctx.font='bold 13px sans-serif';ctx.fillStyle=FG;ctx.textAlign='center';
+      if(v){const z={x:cx+4,y:yo+2,w:CW-8,h:FH-4,ci:ai,type:'fret'};ZONES.push(z);drawFret(ctx,v,z.x,z.y,z.w,z.h)}
+      // Chord name (clickable, blue)
+      ctx.font='bold 13px sans-serif';ctx.fillStyle=BLUE;ctx.textAlign='center';
       ctx.fillText(ch.name,mid,yo+FH+NH-4);
+      ZONES.push({x:cx+2,y:yo+FH+2,w:CW-4,h:NH-2,ci:ai,type:'name'});
+      // Notes
       const dn=(ny,x2)=>{ctx.fillStyle=BLUE;ctx.beginPath();ctx.ellipse(x2,ny,5.5,3.8,0,0,Math.PI*2);ctx.fill()};
       const ledg=(ny,top)=>{ctx.strokeStyle=FG;ctx.lineWidth=1.2;
         if(ny<top-2)for(let ly=top-8;ly>=ny-4;ly-=8){ctx.beginPath();ctx.moveTo(mid-8,ly);ctx.lineTo(mid+8,ly);ctx.stroke()}
@@ -431,10 +395,10 @@ function render(){
   }
 }
 
-// ── SVG fretboard for modal ───────────────────────────────────────────────────
+// ── Alt grepp modal ───────────────────────────────────────────────────────────
 function fretSVG(v,sz){
-  const S=6,F=5,ml=22,mr=5,mt=20,mb=5;
-  const W=sz,H=Math.round(sz*1.35),cw=(W-ml-mr)/(S-1),rh=(H-mt-mb)/F;
+  const S=6,F=5,ml=22,mr=5,mt=20;
+  const W=sz,H=Math.round(sz*1.35),cw=(W-ml-mr)/(S-1),rh=(H-mt-5)/F;
   let mn=99;v.dots.forEach(d=>{if(d.f>0)mn=Math.min(mn,d.f)});
   if(v.barre)mn=Math.min(mn,v.barre.f);if(mn===99)mn=0;
   const sf=mn<=1?0:mn-1,isO=sf===0;
@@ -454,7 +418,6 @@ function fretSVG(v,sz){
   return s+'</svg>';
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────────────
 function openModal(ci){
   const ch=SEQ[ci];
   const positions=getPositions(ch.root,ch.quality);
@@ -476,38 +439,122 @@ function openModal(ci){
 function closeModal(){document.getElementById('modal').classList.remove('open')}
 document.getElementById('modal').onclick=e=>{if(e.target===document.getElementById('modal'))closeModal()};
 
+// ── Chord picker ──────────────────────────────────────────────────────────────
+const PK_ROOTS=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','Cb'];
+const PK_ROOT_KEYS=['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const PK_TYPES=[{l:'maj',s:'major'},{l:'min',s:'minor'},{l:'dim',s:'dim'},{l:'sus4',s:'sus4'},{l:'sus2',s:'sus2'},{l:'aug',s:'aug'}];
+const PK_TENSIONS=[{l:'7',s:'7'},{l:'j7',s:'maj7'},{l:'b9',s:'7b9'},{l:'9',s:'9'},{l:'#9',s:'7#9'},{l:'11',s:'11'},{l:'b5/#11',s:'9#11'},{l:'#5/b13',s:'aug7'},{l:'6/13',s:'13'}];
+const PK_BASS=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','Cb'];
+let pickerCi=null,pkRoot=null,pkType=null,pkTension=null,pkBass=null;
+
+function pickerOpen(ci){
+  pickerCi=ci;
+  const ch=SEQ[ci];
+  pkRoot=ch.root;
+  pkType=PK_TYPES[0];pkTension=null;pkBass=null;
+  buildPicker();
+  document.getElementById('picker-modal').classList.add('open');
+}
+function buildPicker(){
+  document.getElementById('pk-roots').innerHTML=PK_ROOTS.map((r,i)=>
+    `<button class="picker-btn${pkRoot===PK_ROOT_KEYS[i]?' selected':''}" onclick="pkSelectRoot('${PK_ROOT_KEYS[i]}')">${r}</button>`).join('');
+  document.getElementById('pk-types').innerHTML=PK_TYPES.map(t=>
+    `<button class="picker-btn${pkType&&pkType.s===t.s?' selected':''}" onclick="pkSelectType('${t.s}')">${t.l}</button>`).join('');
+  document.getElementById('pk-tensions').innerHTML=
+    `<button class="picker-btn${!pkTension?' selected':''}" onclick="pkSelectTension(null)">—</button>`+
+    PK_TENSIONS.map(t=>`<button class="picker-btn${pkTension&&pkTension.s===t.s?' selected':''}" onclick="pkSelectTension('${t.s}')">${t.l}</button>`).join('');
+  document.getElementById('pk-bass').innerHTML=
+    `<button class="picker-btn${!pkBass?' selected':''}" onclick="pkSelectBass(null)">—</button>`+
+    PK_BASS.map(b=>`<button class="picker-btn${pkBass===b?' selected':''}" onclick="pkSelectBass('${b}')">${b}</button>`).join('');
+}
+function pkSelectRoot(r){pkRoot=r;buildPicker()}
+function pkSelectType(s){pkType=PK_TYPES.find(t=>t.s===s)||PK_TYPES[0];pkTension=null;buildPicker()}
+function pkSelectTension(s){pkTension=s?PK_TENSIONS.find(t=>t.s===s):null;buildPicker()}
+function pkSelectBass(b){pkBass=b;buildPicker()}
+function pickerConfirm(){
+  if(pickerCi===null||!pkRoot||!pkType)return;
+  const suffix=pkTension?pkTension.s:pkType.s;
+  let name=pkRoot;
+  if(pkType.l==='min')name+='m';
+  else if(pkType.l!=='maj')name+=pkType.l;
+  if(pkTension)name+=pkTension.l;
+  if(pkBass)name+='/'+pkBass;
+  const qmap={'major':'maj','minor':'min','7':'7','maj7':'maj7','m7':'min7','dim':'dim','aug':'aug','sus2':'sus2','sus4':'sus4','dim7':'dim7','m7b5':'m7b5','9':'9'};
+  SEQ[pickerCi]={...SEQ[pickerCi],name,root:pkRoot,quality:qmap[suffix]||'maj'};
+  SEL[pickerCi]=0;
+  pickerClose();render();
+}
+function pickerClose(){document.getElementById('picker-modal').classList.remove('open');pickerCi=null}
+document.getElementById('picker-modal').onclick=e=>{if(e.target===document.getElementById('picker-modal'))pickerClose()};
+
 // ── Canvas events ─────────────────────────────────────────────────────────────
 const cv=document.getElementById('cv');
 cv.addEventListener('click',e=>{
   const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
-  for(const z of ZONES)if(mx>=z.x&&mx<=z.x+z.w&&my>=z.y&&my<=z.y+z.h){openModal(z.ci);return}
+  for(const z of ZONES){
+    if(mx>=z.x&&mx<=z.x+z.w&&my>=z.y&&my<=z.y+z.h){
+      if(z.type==='name')pickerOpen(z.ci);else openModal(z.ci);return;
+    }
+  }
 });
 cv.addEventListener('mousemove',e=>{
   const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
   cv.style.cursor=ZONES.some(z=>mx>=z.x&&mx<=z.x+z.w&&my>=z.y&&my<=z.y+z.h)?'pointer':'default';
 });
 
-// ── Log / file ────────────────────────────────────────────────────────────────
-function log(m){console.log(m)}
-function clearLog(){const el=document.getElementById('log');el.textContent='';el.style.display='none'}
+// ── PDF export ────────────────────────────────────────────────────────────────
+function exportPDF(){
+  const btn=document.getElementById('pdf-btn');
+  btn.textContent='Genererar...';btn.disabled=true;
+  const canvas=document.getElementById('cv');
+  const exp=document.createElement('canvas');
+  exp.width=canvas.width;exp.height=canvas.height;
+  const ctx=exp.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,exp.width,exp.height);
+  ctx.drawImage(canvas,0,0);
+  const dataUrl=exp.toDataURL('image/jpeg',0.95);
+  function doExport(){
+    const{jsPDF}=window.jspdf;
+    const dpr=window.devicePixelRatio||1;
+    const mmW=(exp.width/dpr)*0.2646,mmH=(exp.height/dpr)*0.2646;
+    const pdf=new jsPDF({orientation:mmW>mmH?'landscape':'portrait',unit:'mm',format:[mmW,mmH]});
+    pdf.addImage(dataUrl,'JPEG',0,0,mmW,mmH);
+    pdf.save((SONG_TITLE||'ackord')+'.pdf');
+    btn.textContent='⬇ Spara som PDF';btn.disabled=false;
+  }
+  if(window.jspdf){doExport();}
+  else{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    s.onload=doExport;
+    s.onerror=()=>{btn.textContent='⬇ Spara som PDF';btn.disabled=false;alert('Kunde inte ladda PDF-biblioteket.');};
+    document.head.appendChild(s);
+  }
+}
 
+// ── Title input ───────────────────────────────────────────────────────────────
+document.getElementById('title-input').addEventListener('input',function(){
+  SONG_TITLE=this.value;render();
+});
+
+// ── File handling ─────────────────────────────────────────────────────────────
 async function handleFile(file){
   if(!file)return;
-  clearLog();
-  log(`Läser: ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
   try{
-    await loadChords();
-    await loadTonal();
+    await loadDB();
+    try{await loadTonal();}catch(e){}
     const buf=await file.arrayBuffer();
-    const{evs,ppq}=parseMIDI(buf);
-    if(!evs.length){log('Inga note-on events hittades.');return}
+    const{evs,ppq,title}=parseMIDI(buf);
+    if(!evs.length){alert('Inga noter hittades i filen.');return}
     SEQ=buildChords(evs,ppq);
-    log(`Identifierade ${SEQ.length} ackord: ${SEQ.map(c=>c.name).join(', ')}`);
-    if(!SEQ.length){log('Kunde inte identifiera ackord.');return}
+    if(!SEQ.length){alert('Kunde inte identifiera ackord.');return}
     SEL={};
+    SONG_TITLE=title||'';
+    document.getElementById('title-input').value=SONG_TITLE;
+    document.getElementById('toolbar').style.display='flex';
     document.getElementById('staff-wrap').style.display='block';
     setTimeout(render,50);
-  }catch(err){log('FEL: '+err.message+'\n'+err.stack)}
+  }catch(err){alert('Fel: '+err.message);}
 }
 
 document.getElementById('fi').onchange=function(){handleFile(this.files[0])};
@@ -515,21 +562,6 @@ const dz=document.getElementById('drop-zone');
 dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};
 dz.ondragleave=()=>dz.classList.remove('drag');
 dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');handleFile(e.dataTransfer.files[0])};
-
-// Inline fallback chord data – minimal set for common chords if CDN fails
-// (Full data loaded from CDN above; this is last resort)
-const INLINE_CHORDS = {};
-</script>
-
-<script>
-// Inject the full chord data from the document the user provided
-// This runs after the main script and populates INLINE_CHORDS
-(async()=>{
-  // The user pasted the full guitar.json. We load it here directly.
-  const raw = `{"C":[{"key":"C","suffix":"major","positions":[{"frets":[-1,3,2,0,1,0],"fingers":[0,3,2,0,1,0],"baseFret":1,"barres":[],"midi":[48,52,55,60,64]},{"frets":[-1,1,3,3,3,1],"fingers":[0,1,2,3,4,1],"barres":[1],"capo":true,"baseFret":3,"midi":[48,55,60,64,67]},{"frets":[-1,-1,1,1,1,4],"fingers":[0,0,1,1,1,4],"barres":[1],"baseFret":5,"midi":[55,60,64,72]},{"frets":[1,3,3,2,1,1],"fingers":[1,3,4,2,1,1],"barres":[1],"capo":true,"baseFret":8,"midi":[48,55,60,64,67,72]}]},{"key":"C","suffix":"minor","positions":[{"frets":[-1,3,1,0,1,3],"fingers":[0,3,2,0,1,4],"baseFret":1,"barres":[],"midi":[48,51,55,60,67]},{"frets":[1,1,3,3,2,1],"fingers":[1,1,3,4,2,1],"barres":[1],"capo":true,"baseFret":3,"midi":[43,48,55,60,63,67]},{"frets":[1,3,3,1,1,1],"fingers":[1,3,4,1,1,1],"barres":[1],"capo":true,"baseFret":8,"midi":[48,55,60,63,67,72]}]},{"key":"C","suffix":"7","positions":[{"frets":[-1,3,2,3,1,0],"fingers":[0,3,2,4,1,0],"baseFret":1,"barres":[],"midi":[48,52,58,60,64]},{"frets":[-1,1,3,1,3,1],"fingers":[0,1,3,1,4,1],"barres":[1],"capo":true,"baseFret":3,"midi":[48,55,58,64,67]},{"frets":[1,3,1,2,1,1],"fingers":[1,3,1,2,1,1],"barres":[1],"capo":true,"baseFret":8,"midi":[48,55,58,64,67,72]}]},{"key":"C","suffix":"maj7","positions":[{"frets":[3,3,2,0,0,0],"fingers":[2,3,1,0,0,0],"baseFret":1,"barres":[],"midi":[43,48,52,55,59,64]},{"frets":[1,1,3,2,3,1],"fingers":[1,1,3,2,4,1],"barres":[1],"capo":true,"baseFret":3,"midi":[43,48,55,59,64,67]}]},{"key":"C","suffix":"m7","positions":[{"frets":[-1,3,1,3,4,-1],"fingers":[0,2,1,3,4,0],"baseFret":1,"barres":[],"midi":[48,51,58,63]},{"frets":[1,1,3,1,2,1],"fingers":[1,1,3,1,2,1],"barres":[1],"capo":true,"baseFret":3,"midi":[43,48,55,58,63,67]}]},{"key":"C","suffix":"dim","positions":[{"frets":[-1,3,1,-1,1,2],"fingers":[0,4,1,0,2,3],"baseFret":1,"barres":[],"midi":[48,54,60,63]}]},{"key":"C","suffix":"aug","positions":[{"frets":[-1,3,2,1,1,-1],"fingers":[0,3,2,1,1,0],"barres":[1],"baseFret":1,"midi":[48,52,56,60]}]}]}`;
-  // This is just a tiny stub – the real data comes from CDN
-  // If CDN works, INLINE_CHORDS never gets used anyway
-})();
 </script>
 </body>
 </html>

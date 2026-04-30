@@ -488,7 +488,7 @@ cv.addEventListener('mousemove',e=>{
 });
 
 // ── Log / file ────────────────────────────────────────────────────────────────
-function log(m){const el=document.getElementById('log');el.style.display='block';el.textContent+=m+'\n'}
+function log(m){console.log(m)}
 function clearLog(){const el=document.getElementById('log');el.textContent='';el.style.display='none'}
 
 async function handleFile(file){

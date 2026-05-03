@@ -229,6 +229,10 @@ const TMPLS=[
   {n:'maj7',iv:[0,4,7,11]},{n:'min7',iv:[0,3,7,10]},{n:'dim',iv:[0,3,6]},
   {n:'aug',iv:[0,4,8]},{n:'sus2',iv:[0,2,7]},{n:'sus4',iv:[0,5,7]},
   {n:'dim7',iv:[0,3,6,9]},{n:'m7b5',iv:[0,3,6,10]},{n:'9',iv:[0,4,7,10,14]},
+  {n:'6',iv:[0,4,7,9]},{n:'min6',iv:[0,3,7,9]},{n:'7sus4',iv:[0,5,7,10]},
+  {n:'add9',iv:[0,4,7,14]},{n:'min9',iv:[0,3,7,10,14]},{n:'11',iv:[0,4,7,10,14,17]},
+  {n:'13',iv:[0,4,7,10,14,21]},{n:'7b9',iv:[0,4,7,10,13]},{n:'7#9',iv:[0,4,7,10,15]},
+  {n:'9#11',iv:[0,4,7,10,14,18]},{n:'aug7',iv:[0,4,8,10]},
 ];
 
 function bestChordMatch(notes){
@@ -263,22 +267,29 @@ function bestChordMatch(notes){
     }
   }
 
-  const SIMP={'maj':10,'min':10,'7':9,'maj7':9,'min7':9,'dim':8,'aug':8,'dim7':7,'m7b5':7,'9':5,'sus4':6,'sus2':6};
+  // Fallback to template matching with improved scoring
+  const SIMP={'maj':12,'min':12,'7':11,'maj7':11,'min7':11,'dim':10,'aug':10,'dim7':9,'m7b5':9,'9':8,'sus4':9,'sus2':9,'6':10,'min6':10,'7sus4':9,'add9':9,'min9':8,'11':7,'13':6,'7b9':8,'7#9':8,'9#11':7,'aug7':9};
   let best=null,bs=-1;
   for(let r=0;r<12;r++) for(const t of TMPLS){
     const req=t.iv.map(i=>(r+i)%12);
     const hits=req.filter(p=>pcs.includes(p)).length;
     const extra=pcs.filter(p=>!req.includes(p)).length;
-    const score=hits/req.length-(extra*0.1)+((r===bassPc)?0.3:0)+((SIMP[t.n]||5)/100);
+    const missing=req.length-hits;
+    // Improved scoring: prioritize exact matches, penalize extras and missing notes
+    const score=(hits/req.length)*10 - extra*2 - missing*1.5 + ((r===bassPc)?1.5:0) + (SIMP[t.n]||5)/10;
     if(score>bs){bs=score;best={r,t}}
   }
-  if(!best||bs<0.3)return null;
+  if(!best||bs<5)return null; // Lower threshold for better detection
   const rn=NN[best.r],q=best.t.n;
   let d=rn;
   if(q==='min')d+='m';else if(q==='min7')d+='m7';else if(q==='7')d+='7';
   else if(q==='maj7')d+='maj7';else if(q==='dim')d+='dim';else if(q==='aug')d+='aug';
   else if(q==='sus2')d+='sus2';else if(q==='sus4')d+='sus4';
   else if(q==='dim7')d+='dim7';else if(q==='m7b5')d+='m7b5';else if(q==='9')d+='9';
+  else if(q==='6')d+='6';else if(q==='min6')d+='m6';else if(q==='7sus4')d+='7sus4';
+  else if(q==='add9')d+='add9';else if(q==='min9')d+='m9';else if(q==='11')d+='11';
+  else if(q==='13')d+='13';else if(q==='7b9')d+='7b9';else if(q==='7#9')d+='7#9';
+  else if(q==='9#11')d+='9#11';else if(q==='aug7')d+='aug7';
   if(best.r!==bassPc)d+='/'+bassName;
   return{name:d,root:rn,quality:q};
 }
@@ -341,6 +352,10 @@ const DIA=[0,0,1,1,2,3,3,4,4,5,5,6];
 function tY(p,yo){const s=DIA[p%12]+Math.floor(p/12)*7;return yo+(DIA[4]+5*7-s)*4}
 function bY(p,yo){const s=DIA[p%12]+Math.floor(p/12)*7;return yo+(DIA[7]+3*7-s)*4}
 
+// Draw clefs
+function drawTrebleClef(ctx,x,y,size){ctx.font=size+'px serif';ctx.fillStyle=FG;ctx.textAlign='center';ctx.fillText('𝄞',x,y)}
+function drawBassClef(ctx,x,y,size){ctx.font=size+'px serif';ctx.fillStyle=FG;ctx.textAlign='center';ctx.fillText('𝄢',x,y)}
+
 function render(){
   const canvas=document.getElementById('cv');
   if(!canvas||!SEQ.length)return;
@@ -361,9 +376,9 @@ function render(){
   for(let row=0;row<rows;row++){
     const rc=SEQ.slice(row*CPR,(row+1)*CPR);
     const yo=MT+titleH+row*RH,tyo=yo+FH+NH+20,byo=tyo+68;
-    ctx.fillStyle=FG;ctx.textAlign='left';
-    ctx.font='42px serif';ctx.fillText('𝄞',2,tyo+44);
-    ctx.font='28px serif';ctx.fillText('𝄢',2,byo+30);
+    // Draw clefs
+    drawTrebleClef(ctx,20,tyo+30,48);
+    drawBassClef(ctx,20,byo+20,38);
     const lineW=ML+rc.length*CW;
     ctx.strokeStyle=FG;ctx.lineWidth=1.2;
     for(let l=0;l<5;l++){
@@ -384,11 +399,17 @@ function render(){
       ctx.font='bold 13px sans-serif';ctx.fillStyle=BLUE;ctx.textAlign='center';
       ctx.fillText(ch.name,mid,yo+FH+NH-4);
       ZONES.push({x:cx+2,y:yo+FH+2,w:CW-4,h:NH-2,ci:ai,type:'name'});
-      // Notes
-      const dn=(ny,x2)=>{ctx.fillStyle=BLUE;ctx.beginPath();ctx.ellipse(x2,ny,5.5,3.8,0,0,Math.PI*2);ctx.fill()};
+      // Notes with stem and flag
+      const dn=(ny,x2)=>{ctx.fillStyle=BLUE;ctx.beginPath();ctx.ellipse(x2,ny,5.5,3.8,0,0,Math.PI*2);ctx.fill();
+        // Add stem and flag
+        ctx.strokeStyle=BLUE;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x2+5.5,ny);ctx.lineTo(x2+5.5,ny-14);ctx.stroke();
+        // Simple flag
+        ctx.beginPath();ctx.moveTo(x2+5.5,ny-14);ctx.lineTo(x2+8.5,ny-10);ctx.stroke();
+      };
       const ledg=(ny,top)=>{ctx.strokeStyle=FG;ctx.lineWidth=1.2;
-        if(ny<top-2)for(let ly=top-8;ly>=ny-4;ly-=8){ctx.beginPath();ctx.moveTo(mid-8,ly);ctx.lineTo(mid+8,ly);ctx.stroke()}
-        if(ny>top+34)for(let ly=top+40;ly<=ny+4;ly+=8){ctx.beginPath();ctx.moveTo(mid-8,ly);ctx.lineTo(mid+8,ly);ctx.stroke()}};
+        if(ny<top-2)for(let ly=top-8;ly>=ny-4;ly-=8){ctx.beginPath();ctx.moveTo(mid-10,ly);ctx.lineTo(mid+10,ly);ctx.stroke()}
+        if(ny>top+34)for(let ly=top+40;ly<=(ny+4);ly+=8){ctx.beginPath();ctx.moveTo(mid-10,ly);ctx.lineTo(mid+10,ly);ctx.stroke()}
+      };
       ch.notes.filter(n=>n>=55).forEach(n=>{const ny=tY(n,tyo);dn(ny,mid);ledg(ny,tyo)});
       ch.notes.filter(n=>n<55).forEach(n=>{const ny=bY(n,byo);dn(ny,mid);ledg(ny,byo)});
     });
@@ -402,18 +423,18 @@ function fretSVG(v,sz){
   let mn=99;v.dots.forEach(d=>{if(d.f>0)mn=Math.min(mn,d.f)});
   if(v.barre)mn=Math.min(mn,v.barre.f);if(mn===99)mn=0;
   const sf=mn<=1?0:mn-1,isO=sf===0;
-  let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:${sz}px;height:${Math.round(sz*1.35)}px">`;
-  if(isO)s+=`<line x1="${ml}" y1="${mt}" x2="${W-mr}" y2="${mt}" stroke="#111" stroke-width="3.5"/>`;
-  for(let f=1;f<=F;f++)s+=`<text x="${ml-3}" y="${mt+(f-.5)*rh+3}" font-size="7.5" font-weight="bold" fill="#111" text-anchor="end">${sf+f}</text>`;
-  for(let f=0;f<=F;f++)s+=`<line x1="${ml}" y1="${mt+f*rh}" x2="${W-mr}" y2="${mt+f*rh}" stroke="#111" stroke-width="${f===0?1.2:1}"/>`;
-  for(let i=0;i<S;i++)s+=`<line x1="${ml+i*cw}" y1="${mt}" x2="${ml+i*cw}" y2="${mt+F*rh}" stroke="#111" stroke-width="1.2"/>`;
-  v.mute.forEach(st=>s+=`<text x="${ml+(6-st)*cw}" y="${mt-5}" font-size="11" font-weight="bold" fill="#555" text-anchor="middle">×</text>`);
-  v.open.forEach(st=>s+=`<circle cx="${ml+(6-st)*cw}" cy="${mt-7}" r="4" fill="none" stroke="#111" stroke-width="1.5"/>`);
-  if(v.barre){const{f,from,to}=v.barre;const by=mt+(f-sf-.5)*rh,x1=ml+(6-from)*cw,x2=ml+(6-to)*cw;s+=`<rect x="${x1-5}" y="${by-6}" width="${x2-x1+10}" height="12" rx="6" fill="${BLUE}"/>`}
+  let s='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="width:'+sz+'px;height:'+Math.round(sz*1.35)+'px">';
+  if(isO)s+='<line x1="'+ml+'" y1="'+mt+'" x2="'+(W-mr)+'" y2="'+mt+'" stroke="#111" stroke-width="3.5"/>';
+  for(let f=1;f<=F;f++)s+='<text x="'+(ml-3)+'" y="'+(mt+(f-.5)*rh+3)+'" font-size="7.5" font-weight="bold" fill="#111" text-anchor="end">'+(sf+f)+'</text>';
+  for(let f=0;f<=F;f++)s+='<line x1="'+ml+'" y1="'+(mt+f*rh)+'" x2="'+(W-mr)+'" y2="'+(mt+f*rh)+'" stroke="#111" stroke-width="'+(f===0?1.2:1)+'"/>';
+  for(let i=0;i<S;i++)s+='<line x1="'+(ml+i*cw)+'" y1="'+mt+'" x2="'+(ml+i*cw)+'" y2="'+(mt+F*rh)+'" stroke="#111" stroke-width="1.2"/>';
+  v.mute.forEach(st=>s+='<text x="'+(ml+(6-st)*cw)+'" y="'+(mt-5)+'" font-size="11" font-weight="bold" fill="#555" text-anchor="middle">×</text>');
+  v.open.forEach(st=>s+='<circle cx="'+(ml+(6-st)*cw)+'" cy="'+(mt-7)+'" r="4" fill="none" stroke="#111" stroke-width="1.5"/>');
+  if(v.barre){const{f,from,to}=v.barre;const by=mt+(f-sf-.5)*rh,x1=ml+(6-from)*cw,x2=ml+(6-to)*cw;s+='<rect x="'+(x1-5)+'" y="'+(by-6)+'" width="'+(x2-x1+10)+'" height="12" rx="6" fill="'+BLUE+'"/>'}
   v.dots.forEach(d=>{
-    if(d.f===0){s+=`<circle cx="${ml+(6-d.s)*cw}" cy="${mt-7}" r="4" fill="none" stroke="#111" stroke-width="1.5"/>`;return}
+    if(d.f===0){s+='<circle cx="'+(ml+(6-d.s)*cw)+'" cy="'+(mt-7)+'" r="4" fill="none" stroke="#111" stroke-width="1.5"/>';return}
     const x=ml+(6-d.s)*cw,y=mt+(d.f-sf-.5)*rh;
-    s+=`<circle cx="${x}" cy="${y}" r="${Math.min(cw,rh)*.4}" fill="${BLUE}"/>`;
+    s+='<circle cx="'+x+'" cy="'+y+'" r="'+(Math.min(cw,rh)*.4)+'" fill="'+BLUE+'"/>';
   });
   return s+'</svg>';
 }
@@ -512,13 +533,30 @@ function exportPDF(){
   const ctx=exp.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,exp.width,exp.height);
   ctx.drawImage(canvas,0,0);
-  const dataUrl=exp.toDataURL('image/jpeg',0.95);
+  const dataUrl=exp.toDataURL('image/png');
   function doExport(){
     const{jsPDF}=window.jspdf;
     const dpr=window.devicePixelRatio||1;
-    const mmW=(exp.width/dpr)*0.2646,mmH=(exp.height/dpr)*0.2646;
-    const pdf=new jsPDF({orientation:mmW>mmH?'landscape':'portrait',unit:'mm',format:[mmW,mmH]});
-    pdf.addImage(dataUrl,'JPEG',0,0,mmW,mmH);
+    const imgWidthPx=exp.width/dpr, imgHeightPx=exp.height/dpr;
+    const mmPerPx=25.4/96; // Approximate mm per pixel at 96 DPI
+    const imgWidthMm=imgWidthPx*mmPerPx, imgHeightMm=imgHeightPx*mmPerPx;
+    const pageWidth=210, pageHeight=297; // A4 in mm
+    const pageHeightPx = Math.floor(pageHeight / mmPerPx); // ~1123 px per A4 page
+    const numPages = Math.ceil(imgHeightPx / pageHeightPx);
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    for (let page = 0; page < numPages; page++) {
+      if (page > 0) pdf.addPage();
+      const sourceY = page * pageHeightPx;
+      const sourceHeight = Math.min(pageHeightPx, imgHeightPx - sourceY);
+      // Create a new canvas for this page
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = imgWidthPx;
+      pageCanvas.height = sourceHeight;
+      const pageCtx = pageCanvas.getContext('2d');
+      pageCtx.drawImage(exp, 0, sourceY * dpr, exp.width, sourceHeight * dpr, 0, 0, imgWidthPx, sourceHeight);
+      const pageDataUrl = pageCanvas.toDataURL('image/png');
+      pdf.addImage(pageDataUrl, 'PNG', 0, 0, pageWidth, pageHeight);
+    }
     pdf.save((SONG_TITLE||'ackord')+'.pdf');
     btn.textContent='⬇ Spara som PDF';btn.disabled=false;
   }

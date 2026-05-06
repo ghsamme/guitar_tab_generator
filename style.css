@@ -1,0 +1,37 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:sans-serif;background:#f5f5f0;color:#111;padding:1.5rem}
+h1{font-size:22px;font-weight:500;margin-bottom:1.5rem}
+.upload-area{border:1.5px dashed #bbb;border-radius:12px;padding:2rem;text-align:center;cursor:pointer;background:#fff;margin-bottom:1rem;transition:border-color .2s}
+.upload-area:hover,.upload-area.drag{border-color:#4a7fd4}
+input[type=file]{display:none}
+#toolbar{display:none;gap:8px;align-items:center;margin-bottom:12px}
+#title-input{flex:1;padding:8px 12px;border:1px solid #ccc;border-radius:8px;font-size:15px}
+#pdf-btn{padding:8px 16px;background:#4a7fd4;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;white-space:nowrap}
+#pdf-btn:hover{background:#3a6bc4}
+#staff-wrap{display:none;background:#fff;border:1px solid #ccc;border-radius:12px;padding:1.25rem 1rem 1rem;overflow-x:auto;margin-bottom:1rem}
+/* Chord picker */
+#picker-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
+#picker-modal.open{display:flex}
+.picker{background:#2a2a2a;border-radius:12px;padding:1.25rem;color:#ddd;width:560px;max-height:88vh;overflow-y:auto}
+.picker h2{font-size:15px;font-weight:500;color:#aaa;margin-bottom:1rem;letter-spacing:.05em}
+.picker-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0}
+.picker-col-head{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.08em;padding:.4rem .5rem;border-bottom:1px solid #444;text-align:center}
+.picker-btn{background:#333;border:none;color:#ccc;padding:.35rem .5rem;font-size:13px;cursor:pointer;text-align:center;border-bottom:1px solid #222;transition:background .1s;width:100%}
+.picker-btn:hover{background:#4a7fd4;color:#fff}
+.picker-btn.selected{background:#4a7fd4;color:#fff;font-weight:600}
+.picker-actions{display:flex;gap:.5rem;margin-top:1rem}
+.picker-actions button{flex:1;padding:.6rem;border-radius:6px;border:none;cursor:pointer;font-size:14px}
+.picker-ok{background:#4a7fd4;color:#fff}
+.picker-cancel{background:#444;color:#ccc}
+/* Alt grepp modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:1.5rem;width:560px;max-height:88vh;overflow-y:auto;color:#111}
+.modal h2{font-size:18px;font-weight:600;margin-bottom:.2rem}
+.modal-sub{font-size:12px;color:#666;margin-bottom:1rem}
+.alt-grid{display:flex;flex-wrap:wrap;gap:.6rem}
+.alt-item{cursor:pointer;padding:.4rem .5rem;border-radius:8px;border:1.5px solid #ccc;text-align:center}
+.alt-item:hover{border-color:#4a7fd4}
+.alt-item.selected{border:2.5px solid #4a7fd4;background:#eef3fc}
+.alt-label{font-size:10px;color:#555;margin-top:.2rem}
+.close-btn{margin-top:1rem;width:100%}

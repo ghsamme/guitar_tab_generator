@@ -9,8 +9,16 @@ let CHORDS=null, Tonal=null;
 
 // ── DB loader ─────────────────────────────────────────────────────────────────
 const ROOT_TO_KEY={'C':'C','C#':'C#','Db':'C#','D':'D','D#':'Eb','Eb':'Eb','E':'E','F':'F','F#':'F#','Gb':'F#','G':'G','G#':'Ab','Ab':'Ab','A':'A','A#':'Bb','Bb':'Bb','B':'B'};
-const KEY_PROP={'C':'C','C#':'Csharp','D':'D','Eb':'Eb','E':'E','F':'F','F#':'F#','G':'G','Ab':'Ab','A':'A','Bb':'Bb','B':'B'};
-const QUAL_TO_SUFFIX={'maj':'major','min':'minor','7':'7','maj7':'maj7','min7':'m7','dim':'dim','dim7':'dim7','aug':'aug','sus2':'sus2','sus4':'sus4','9':'9','m7b5':'m7b5','11':'11','13':'13','6':'6'};
+const KEY_PROP={'C':'C','C#':'Csharp','D':'D','Eb':'Eb','E':'E','F':'F','F#':'Fsharp','G':'G','Ab':'Ab','A':'A','Bb':'Bb','B':'B'};
+const QUAL_TO_SUFFIX={
+  // Internal quality names
+  'maj':'major','min':'minor','7':'7','maj7':'maj7','min7':'m7','dim':'dim','dim7':'dim7',
+  'aug':'aug','sus2':'sus2','sus4':'sus4','9':'9','m7b5':'m7b5','11':'11','13':'13','6':'6',
+  'min6':'m6','7sus4':'7sus4','add9':'add9','min9':'m9','7b9':'7b9','7#9':'7#9','aug7':'aug7','9#11':'9#11',
+  // Tonal.js quality names
+  '':'major','M':'major','m':'minor','m7':'m7','maj9':'maj9','m9':'m9','m6':'m6',
+  'mmaj7':'mmaj7','maj7#11':'maj7#11','7#11':'7#11','6/9':'6/9','b5':'b5','5':'5',
+};
 
 async function loadDB(){
   if(CHORDS) return;
@@ -265,7 +273,7 @@ function drawFret(ctx,v,x,y,w,h){
   ctx.font='bold 11px sans-serif';ctx.textAlign='center';
   v.mute.forEach(s=>{ctx.fillStyle=MUTEC;ctx.fillText('×',x+ml+(6-s)*cw,y+mt-5)});
   v.open.forEach(s=>{ctx.strokeStyle=FG;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x+ml+(6-s)*cw,y+mt-7,4,0,Math.PI*2);ctx.stroke()});
-  if(v.barre){const{f,from,to}=v.barre;const by=y+mt+(f-sf-.5)*rh,bx1=x+ml+(6-from)*cw,bx2=x+ml+(6-to)*cw;ctx.fillStyle=BLUE;ctx.beginPath();ctx.roundRect(bx1-5,by-6,bx2-bx1+10,12,6);ctx.fill()}
+  if(v.barre){const{f,from,to}=v.barre;const by=y+mt+(f-sf-.5)*rh,bx1=x+ml+(6-from)*cw,bx2=x+ml+(6-to)*cw;ctx.fillStyle=BLUE;ctx.beginPath();ctx.roundRect(bx1-4,by-4,bx2-bx1+8,8,4);ctx.fill()}
   v.dots.forEach(d=>{
     if(d.f===0){ctx.strokeStyle=FG;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x+ml+(6-d.s)*cw,y+mt-7,4,0,Math.PI*2);ctx.stroke();return}
     const dx=x+ml+(6-d.s)*cw,dy=y+mt+(d.f-sf-.5)*rh;
@@ -275,8 +283,8 @@ function drawFret(ctx,v,x,y,w,h){
 }
 
 const DIA=[0,0,1,1,2,3,3,4,4,5,5,6];
-function tY(p,yo){const s=DIA[p%12]+Math.floor(p/12)*7;return yo+(DIA[4]+5*7-s)*4}
-function bY(p,yo){const s=DIA[p%12]+Math.floor(p/12)*7;return yo+(DIA[7]+3*7-s)*4}
+function tY(p,yo){const s=DIA[p%12]+Math.floor(p/12)*7;return yo+(DIA[5]+6*7-s)*4}
+function bY(p,yo){const s=DIA[p%12]+Math.floor(p/12)*7;return yo+(DIA[9]+4*7-s)*4}
 
 function drawTrebleClef(ctx,x,y,size){ctx.font=size+'px serif';ctx.fillStyle=FG;ctx.textAlign='center';ctx.fillText('𝄞',x,y)}
 function drawBassClef(ctx,x,y,size){ctx.font=size+'px serif';ctx.fillStyle=FG;ctx.textAlign='center';ctx.fillText('𝄢',x,y)}
@@ -318,13 +326,14 @@ function render(){
       const positions=getPositions(ch.root,ch.quality);
       const raw=positions[Math.min(vi,positions.length-1)];
       const v=raw?convertPos(raw):null;
-      if(v){const z={x:cx+4,y:yo+2,w:CW-8,h:FH-4,ci:ai,type:'fret'};ZONES.push(z);drawFret(ctx,v,z.x,z.y,z.w,z.h)}
+      const delX=cx+CW-18,delY=yo+4;
+      if(v){ZONES.push({x:delX,y:delY,w:16,h:16,ci:ai,type:'delete'});const z={x:cx+4,y:yo+2,w:CW-8,h:FH-4,ci:ai,type:'fret'};ZONES.push(z);drawFret(ctx,v,z.x,z.y,z.w,z.h);ctx.font='bold 14px sans-serif';ctx.fillStyle='#bbb';ctx.textAlign='center';ctx.fillText('×',delX+8,delY+12)}
       ctx.font='bold 13px sans-serif';ctx.fillStyle=BLUE;ctx.textAlign='center';
       ctx.fillText(ch.name,mid,yo+FH+NH-4);
       ZONES.push({x:cx+2,y:yo+FH+2,w:CW-4,h:NH-2,ci:ai,type:'name'});
-      const dn=(ny,x2)=>{ctx.fillStyle=BLUE;ctx.beginPath();ctx.ellipse(x2,ny,5.5,3.8,0,0,Math.PI*2);ctx.fill();
-        ctx.strokeStyle=BLUE;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x2+5.5,ny);ctx.lineTo(x2+5.5,ny-14);ctx.stroke();
-        ctx.beginPath();ctx.moveTo(x2+5.5,ny-14);ctx.lineTo(x2+8.5,ny-10);ctx.stroke();
+      const dn=(ny,x2)=>{ctx.fillStyle=BLUE;ctx.beginPath();ctx.ellipse(x2,ny,4,2.8,0,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle=BLUE;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x2+4,ny);ctx.lineTo(x2+4,ny-22);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x2+4,ny-22);ctx.lineTo(x2+8,ny-17);ctx.stroke();
       };
       const ledg=(ny,top)=>{ctx.strokeStyle=FG;ctx.lineWidth=1.2;
         if(ny<top-2)for(let ly=top-8;ly>=ny-4;ly-=8){ctx.beginPath();ctx.moveTo(mid-10,ly);ctx.lineTo(mid+10,ly);ctx.stroke()}
@@ -349,7 +358,7 @@ function fretSVG(v,sz){
   for(let i=0;i<S;i++)s+='<line x1="'+(ml+i*cw)+'" y1="'+mt+'" x2="'+(ml+i*cw)+'" y2="'+(mt+F*rh)+'" stroke="#111" stroke-width="1.2"/>';
   v.mute.forEach(st=>s+='<text x="'+(ml+(6-st)*cw)+'" y="'+(mt-5)+'" font-size="11" font-weight="bold" fill="#555" text-anchor="middle">×</text>');
   v.open.forEach(st=>s+='<circle cx="'+(ml+(6-st)*cw)+'" cy="'+(mt-7)+'" r="4" fill="none" stroke="#111" stroke-width="1.5"/>');
-  if(v.barre){const{f,from,to}=v.barre;const by=mt+(f-sf-.5)*rh,x1=ml+(6-from)*cw,x2=ml+(6-to)*cw;s+='<rect x="'+(x1-5)+'" y="'+(by-6)+'" width="'+(x2-x1+10)+'" height="12" rx="6" fill="'+BLUE+'"/>'}
+  if(v.barre){const{f,from,to}=v.barre;const by=mt+(f-sf-.5)*rh,x1=ml+(6-from)*cw,x2=ml+(6-to)*cw;s+='<rect x="'+(x1-4)+'" y="'+(by-4)+'" width="'+(x2-x1+8)+'" height="8" rx="4" fill="'+BLUE+'"/>'}
   v.dots.forEach(d=>{
     if(d.f===0){s+='<circle cx="'+(ml+(6-d.s)*cw)+'" cy="'+(mt-7)+'" r="4" fill="none" stroke="#111" stroke-width="1.5"/>';return}
     const x=ml+(6-d.s)*cw,y=mt+(d.f-sf-.5)*rh;
@@ -383,7 +392,7 @@ document.getElementById('modal').onclick=e=>{if(e.target===document.getElementBy
 const PK_ROOTS=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','Cb'];
 const PK_ROOT_KEYS=['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
 const PK_TYPES=[{l:'maj',s:'major'},{l:'min',s:'minor'},{l:'dim',s:'dim'},{l:'sus4',s:'sus4'},{l:'sus2',s:'sus2'},{l:'aug',s:'aug'}];
-const PK_TENSIONS=[{l:'7',s:'7'},{l:'j7',s:'maj7'},{l:'b9',s:'7b9'},{l:'9',s:'9'},{l:'#9',s:'7#9'},{l:'11',s:'11'},{l:'b5/#11',s:'9#11'},{l:'#5/b13',s:'aug7'},{l:'6/13',s:'13'}];
+const PK_TENSIONS=[{l:'7',s:'7'},{l:'maj7',s:'maj7'},{l:'b9',s:'7b9'},{l:'9',s:'9'},{l:'#9',s:'7#9'},{l:'11',s:'11'},{l:'b5/#11',s:'9#11'},{l:'#5/b13',s:'aug7'},{l:'6/13',s:'13'}];
 const PK_BASS=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','Cb'];
 let pickerCi=null,pkRoot=null,pkType=null,pkTension=null,pkBass=null;
 
@@ -391,7 +400,22 @@ function pickerOpen(ci){
   pickerCi=ci;
   const ch=SEQ[ci];
   pkRoot=ch.root;
-  pkType=PK_TYPES[0];pkTension=null;pkBass=null;
+  const qmap={
+    'maj':{t:'major',n:null},'min':{t:'minor',n:null},'dim':{t:'dim',n:null},
+    'aug':{t:'aug',n:null},'sus2':{t:'sus2',n:null},'sus4':{t:'sus4',n:null},
+    '7':{t:'major',n:'7'},'maj7':{t:'major',n:'maj7'},'min7':{t:'minor',n:'7'},
+    'dim7':{t:'dim',n:null},'m7b5':{t:'dim',n:'7'},'9':{t:'major',n:'9'},
+    '11':{t:'major',n:'11'},'13':{t:'major',n:'13'},'7b9':{t:'major',n:'7b9'},
+    '7#9':{t:'major',n:'7#9'},'9#11':{t:'major',n:'9#11'},'aug7':{t:'aug',n:'aug7'},
+  };
+  const q=qmap[ch.quality]||{t:'major',n:null};
+  pkType=PK_TYPES.find(t=>t.s===q.t)||PK_TYPES[0];
+  pkTension=q.n?PK_TENSIONS.find(t=>t.s===q.n):null;
+  const sharpToFlat={'C#':'Db','D#':'Eb','F#':'Gb','G#':'Ab','A#':'Bb'};
+  const bassMatch=ch.name.match(/\/([A-G][b#]?)$/);
+  const rawBass=bassMatch?bassMatch[1]:null;
+  const bass=rawBass?(sharpToFlat[rawBass]||rawBass):null;
+  pkBass=PK_BASS.includes(bass)?bass:null;
   buildPicker();
   document.getElementById('picker-modal').classList.add('open');
 }
@@ -420,11 +444,20 @@ function pickerConfirm(){
   if(pkTension)name+=pkTension.l;
   if(pkBass)name+='/'+pkBass;
   const qmap={'major':'maj','minor':'min','7':'7','maj7':'maj7','m7':'min7','dim':'dim','aug':'aug','sus2':'sus2','sus4':'sus4','dim7':'dim7','m7b5':'m7b5','9':'9'};
-  SEQ[pickerCi]={...SEQ[pickerCi],name,root:pkRoot,quality:qmap[suffix]||'maj'};
-  SEL[pickerCi]=0;
+  const quality=qmap[suffix]||'maj';
+  if(pickerCi>=SEQ.length){
+    SEQ.push({name,root:pkRoot,quality,beat:SEQ.length,notes:[]});
+    SEL[SEQ.length-1]=0;
+    document.getElementById('toolbar').style.display='flex';
+    document.getElementById('staff-wrap').style.display='block';
+  }else{
+    SEQ[pickerCi]={...SEQ[pickerCi],name,root:pkRoot,quality};
+    SEL[pickerCi]=0;
+  }
   pickerClose();render();
 }
 function pickerClose(){document.getElementById('picker-modal').classList.remove('open');pickerCi=null}
+function pickerAdd(){loadDB().then(()=>{pickerCi=SEQ.length;pkRoot='C';pkType=PK_TYPES[0];pkTension=null;pkBass=null;buildPicker();document.getElementById('picker-modal').classList.add('open')})}
 document.getElementById('picker-modal').onclick=e=>{if(e.target===document.getElementById('picker-modal'))pickerClose()};
 
 const cv=document.getElementById('cv');
@@ -432,6 +465,7 @@ cv.addEventListener('click',e=>{
   const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
   for(const z of ZONES){
     if(mx>=z.x&&mx<=z.x+z.w&&my>=z.y&&my<=z.y+z.h){
+      if(z.type==='delete'){SEQ.splice(z.ci,1);const ns={};Object.entries(SEL).forEach(([k,sv])=>{const ki=parseInt(k);if(ki<z.ci)ns[ki]=sv;else if(ki>z.ci)ns[ki-1]=sv});SEL=ns;if(!SEQ.length){document.getElementById('staff-wrap').style.display='none';document.getElementById('toolbar').style.display='none';}render();return;}
       if(z.type==='name')pickerOpen(z.ci);else openModal(z.ci);return;
     }
   }
@@ -518,10 +552,11 @@ async function handleFile(file){
     document.getElementById('title-input').value=SONG_TITLE;
     document.getElementById('toolbar').style.display='flex';
     document.getElementById('staff-wrap').style.display='block';
-    setTimeout(render,50);
+    render();
   }catch(err){alert('Fel: '+err.message);}
 }
 
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();pickerClose()}});
 document.getElementById('fi').onchange=function(){handleFile(this.files[0])};
 const dz=document.getElementById('drop-zone');
 dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};

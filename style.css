@@ -8,6 +8,8 @@ input[type=file]{display:none}
 #title-input{flex:1;padding:8px 12px;border:1px solid #ccc;border-radius:8px;font-size:15px}
 #pdf-btn{padding:8px 16px;background:#4a7fd4;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;white-space:nowrap}
 #pdf-btn:hover{background:#3a6bc4}
+#add-chord-btn{padding:8px 20px;background:#fff;border:1.5px solid #bbb;border-radius:8px;font-size:14px;cursor:pointer;color:#333}
+#add-chord-btn:hover{border-color:#4a7fd4;color:#4a7fd4}
 #staff-wrap{display:none;background:#fff;border:1px solid #ccc;border-radius:12px;padding:1.25rem 1rem 1rem;overflow-x:auto;margin-bottom:1rem}
 /* Chord picker */
 #picker-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
@@ -34,4 +36,5 @@ input[type=file]{display:none}
 .alt-item:hover{border-color:#4a7fd4}
 .alt-item.selected{border:2.5px solid #4a7fd4;background:#eef3fc}
 .alt-label{font-size:10px;color:#555;margin-top:.2rem}
-.close-btn{margin-top:1rem;width:100%}
+.close-btn{margin-top:1rem;width:100%;padding:8px 16px;background:#4a7fd4;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer}
+.close-btn:hover{background:#3a6bc4}
